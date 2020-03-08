@@ -40,6 +40,6 @@ struct TestIndexItem: IndexItem {
     completion: @escaping (SearchableRepresentation) -> Void)
   {
     progressHandler(1.0)
-    completion(SearchableRepresentation(words: [string], dates: Set<Date>()))
+    completion(SearchableRepresentation(text: [[Text(string: string, confidence: 1.0)]], dates: Set<Date>()))
   }
 }

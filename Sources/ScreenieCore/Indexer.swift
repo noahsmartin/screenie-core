@@ -90,6 +90,10 @@ public final class Indexer<A: IndexItem> {
     index.query(string: string)
   }
 
+  public func debug(item: A) -> ProcessedLanguage? {
+    index.debug(item: item)
+  }
+
   private let indexContext = IndexContext()
   private var startingItemsCount: Int? = nil
   private let operationQueue = OperationQueue()
@@ -126,7 +130,7 @@ public final class Indexer<A: IndexItem> {
             dates: searchable.dates,
             item: item)
           self.index.add(
-            keys: searchable.words,
+            keys: searchable.text,
             item: item,
             tagger: object.0)
           self.progressQueue.sync {
@@ -152,17 +156,40 @@ final class Index<A: Hashable> {
     let weight: Double
   }
 
-  func add(keys: Set<String>, item: A, tagger: NLTagger) {
-    // Determining the lemma is expensive, so only do it for ones we need.
-    let (newKeys, existingKeys) = splitKeys(keys)
-    // Existing keys we know are already lemmas.
-    var lemmaKeys = existingKeys
-    for key in newKeys {
-      let lemma = key.lemma(tagger: tagger)
-      lemmaKeys.insert(lemma)
+  func add(keys: [[Text]], item: A, tagger: NLTagger) {
+    var lemmaFrequency = [String: Int]()
+    var originalWordFrequency = [String: Int]()
+    var wordKeys = Set<String>()
+    for key in keys {
+      for text in key {
+        tagger.string = text.string
+        tagger.enumerateTags(in: tagger.string!.startIndex..<tagger.string!.endIndex, unit: .word, scheme: .lemma, options: .init()) { tag, range -> Bool in
+          guard let originalString = tagger.string?[range].trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else { return true }
+
+          let computedValue = (tag?.rawValue ?? String(originalString)).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+          if !computedValue.isEmpty {
+            if let freq = lemmaFrequency[computedValue] {
+              lemmaFrequency[computedValue] = freq + 1
+            } else {
+              lemmaFrequency[computedValue] = 1
+            }
+            wordKeys.insert(computedValue)
+            if originalString != computedValue {
+              if let freq = originalWordFrequency[originalString] {
+                originalWordFrequency[originalString] = freq + 1
+              } else {
+                originalWordFrequency[originalString] = 1
+              }
+              wordKeys.insert(originalString)
+            }
+          }
+          return true
+        }
+      }
     }
     accessQueue.async(flags: .barrier) {
-      for key in lemmaKeys {
+      self.discoveredWords[item] = ProcessedLanguage(recognizedText: keys, lemmas: lemmaFrequency, originalWords: originalWordFrequency)
+      for key in wordKeys {
         if self.mapping[key] != nil {
           self.mapping[key]?.append(item)
         } else {
@@ -186,6 +213,7 @@ final class Index<A: Hashable> {
 
   func remove(item: A) {
     accessQueue.async(flags: .barrier) {
+      self.discoveredWords[item] = nil
       for key in self.dateMapping.keys {
         self.dateMapping[key] = self.dateMapping[key]?.filter { $0 != item }
       }
@@ -195,17 +223,19 @@ final class Index<A: Hashable> {
     }
   }
 
+  func debug(item: A) -> ProcessedLanguage? {
+    var result: ProcessedLanguage? = nil
+    accessQueue.sync {
+      result = discoveredWords[item]
+    }
+    return result
+  }
+
   private let accessQueue: DispatchQueue
+  private var discoveredWords = [A: ProcessedLanguage]()
   private var mapping = [String: [A]]()
   private var dateMapping = [Date: [A]]()
   private let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-
-  // Splits the input keys into ones that already are in the index and ones that are new.
-  private func splitKeys(_ keys: Set<String>) -> (newKeys: Set<String>, existingKeys: Set<String>) {
-    accessQueue.sync {
-      (keys.filter { self.mapping[$0] == nil }, keys.filter { self.mapping[$0] != nil })
-    }
-  }
 
   // Safe to call from any thread
   fileprivate func query(string: String) -> [A] {
@@ -225,7 +255,7 @@ final class Index<A: Hashable> {
         }
       }
 
-      queryMatches = queries.map { query -> (Set<A>, Set<A>) in
+      queryMatches = queries.map { $0.lowercased() }.map { query -> (Set<A>, Set<A>) in
         let exactMatch = Set(mapping[query] ?? [])
         var partialMatch = Set<A>()
         if query.count > 3 {

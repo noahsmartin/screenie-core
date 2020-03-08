@@ -8,7 +8,7 @@
 import Foundation
 import Vision
 
-public typealias WordProvider = (_ maxCandidates: Int, _ minConfidence: VNConfidence) -> [String]
+public typealias WordProvider = (_ maxCandidates: Int, _ minConfidence: VNConfidence) -> [[Text]]
 
 extension ImageFile {
 
@@ -34,10 +34,10 @@ extension ImageFile {
           observation
             .topCandidates(maxCandidates)
             .filter({ $0.confidence >= minConfidence })
-            .reduce([String]()) { acc, text in
-              acc + [text.string]
+            .reduce([Text]()) { acc, text in
+              acc + [Text(string: text.string, confidence: text.confidence)]
           }
-        }.reduce([], +)
+        }
       }
 
       hasCalledCompletion = true

@@ -13,7 +13,7 @@ public final class ImageWordsCache {
 
   init?() {
     if let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-      self.cacheFile = directory.appendingPathComponent("imageTagCache")
+      self.cacheFile = directory.appendingPathComponent("imageTagCache_v2")
     } else {
       return nil
     }
@@ -31,20 +31,20 @@ public final class ImageWordsCache {
 
   public private(set) var cacheSize: Int
 
-  public func readFromCache(screenshot: ImageFile) -> [String]? {
+  public func readFromCache(screenshot: ImageFile) -> [[Text]]? {
     let cacheID = screenshot.cacheKey
     return cacheQueue.sync {
-      return self.cache?.items[cacheID]?.words
+      return self.cache?.items[cacheID]
     }
   }
 
-  public func writeToCache(screenshot: ImageFile, words: [String]) {
+  public func writeToCache(screenshot: ImageFile, words: [[Text]]) {
     let cacheID = screenshot.cacheKey
     if cache == nil {
       cache = Cache(items: [:])
     }
     cacheQueue.async(flags: .barrier) {
-      self.cache?.items[cacheID] = CacheItem(words: words)
+      self.cache?.items[cacheID] = words
       if let data = try? self.encoder.encode(self.cache) {
         self.cacheSize = data.count
         try? data.write(to: self.cacheFile)
@@ -70,9 +70,5 @@ public final class ImageWordsCache {
 }
 
 struct Cache: Codable {
-  var items: [String: CacheItem]
-}
-
-struct CacheItem: Codable {
-  let words: [String]
+  var items: [String: [[Text]]]
 }

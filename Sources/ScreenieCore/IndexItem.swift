@@ -14,13 +14,18 @@ public class IndexContext {
   public let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
 }
 
+public struct Text: Codable, Hashable {
+  public let string: String
+  public let confidence: Float
+}
+
 public struct SearchableRepresentation {
-  public init(words: Set<String>, dates: Set<Date>) {
-    self.words = words
+  public init(text: [[Text]], dates: Set<Date>) {
+    self.text = text
     self.dates = dates
   }
 
-  public let words: Set<String>
+  public let text: [[Text]]
   public let dates: Set<Date>
 }
 
