@@ -30,12 +30,16 @@ final class ScreenieCoreTests: XCTestCase {
     ]
 }
 
-struct TestIndexItem: IndexItem {
+struct TestIndexItem: IndexItem, Comparable {
+  
   let string: String
+  
+  static func < (lhs: TestIndexItem, rhs: TestIndexItem) -> Bool {
+    lhs.string < rhs.string
+  }
 
   func getSearchableRepresentation(
     indexContext: IndexContext,
-    tokenizer: NLTokenizer,
     progressHandler: @escaping (Double) -> Void,
     completion: @escaping (SearchableRepresentation) -> Void)
   {

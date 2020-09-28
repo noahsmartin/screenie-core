@@ -15,7 +15,7 @@ public enum IndexSpeed: String {
   case fast
 }
 
-public final class Indexer<A: IndexItem> {
+public final class Indexer<A: IndexItem & Comparable> {
 
   public init(
     speed: IndexSpeed,
@@ -29,12 +29,12 @@ public final class Indexer<A: IndexItem> {
     let maxOperations = speed == .standard ? max(1, processors-2) : processors
     operationQueue.maxConcurrentOperationCount = maxOperations
     vendor = ThreadSafeVendor(maxItems: maxOperations) {
-      (NLTagger(tagSchemes: [.lemma]), NLTokenizer(unit: .word))
+      NLTagger(tagSchemes: [.lemma])
     }
   }
 
   @Published public private(set) var isFinished: Bool = true
-  @Published public private(set) var totalProgress: Double = 1
+  @Published public private(set) var totalProgress: Double = 0
   
   let index: Index<A>
 
@@ -97,7 +97,7 @@ public final class Indexer<A: IndexItem> {
   private let indexContext = IndexContext()
   private var startingItemsCount: Int? = nil
   private let operationQueue = OperationQueue()
-  private let vendor: ThreadSafeVendor<(NLTagger, NLTokenizer)>
+  private let vendor: ThreadSafeVendor<NLTagger>
   private let progressQueue: DispatchQueue
 
   // Always accessed on progressQueue
@@ -116,7 +116,6 @@ public final class Indexer<A: IndexItem> {
       self.vendor.vend { [weak self] object in
         item.getSearchableRepresentation(
           indexContext: indexContext,
-          tokenizer: object.1,
           progressHandler: { [weak self] theProgress in
           guard let self = self, shouldReportProgress else { return }
 
@@ -132,7 +131,7 @@ public final class Indexer<A: IndexItem> {
           self.index.add(
             keys: searchable.text,
             item: item,
-            tagger: object.0)
+            tagger: object)
           self.progressQueue.sync {
             self.completed = self.completed + (1.0 - lastProgress)
           }
@@ -145,7 +144,7 @@ public final class Indexer<A: IndexItem> {
 
 }
 
-final class Index<A: Hashable> {
+final class Index<A: Hashable & Comparable> {
 
   init(accessQueue: DispatchQueue) {
     self.accessQueue = accessQueue
@@ -285,7 +284,12 @@ final class Index<A: Hashable> {
       }
     }
     return resultsToWeight.keys.sorted { first, second -> Bool in
-      (resultsToWeight[first] ?? 0) > (resultsToWeight[second] ?? 0)
+      let firstWeight = resultsToWeight[first] ?? 0
+      let secondWeight = resultsToWeight[second] ?? 0
+      if firstWeight == secondWeight {
+        return first > second
+      }
+      return firstWeight > secondWeight
     }
   }
 }

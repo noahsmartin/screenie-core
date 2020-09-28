@@ -45,9 +45,12 @@ public final class ImageWordsCache {
     }
     cacheQueue.async(flags: .barrier) {
       self.cache?.items[cacheID] = words
-      if let data = try? self.encoder.encode(self.cache) {
+      do {
+        let data = try self.encoder.encode(self.cache)
         self.cacheSize = data.count
-        try? data.write(to: self.cacheFile)
+        try data.write(to: self.cacheFile)
+      } catch {
+        print("Error saving data \(error)")
       }
     }
   }

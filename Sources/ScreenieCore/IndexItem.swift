@@ -32,7 +32,6 @@ public struct SearchableRepresentation {
 public protocol IndexItem: Hashable {
   func getSearchableRepresentation(
     indexContext: IndexContext,
-    tokenizer: NLTokenizer,
     progressHandler: @escaping (Double) -> Void,
     completion: @escaping (SearchableRepresentation) -> Void)
 }
